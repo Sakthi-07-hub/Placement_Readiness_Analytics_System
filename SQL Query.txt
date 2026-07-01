@@ -1,0 +1,1406 @@
+-- ============================================================
+--  PLACEMENT READINESS ANALYTICS SYSTEM
+--  Phase 1 : Database Schema (MySQL)
+--  Author  : Your Name
+--  Version : 1.0
+-- ============================================================
+
+CREATE DATABASE IF NOT EXISTS placement_readiness;
+USE placement_readiness;
+-- ------------------------------------------------------------
+-- TABLE 1 : students
+-- Core student profile — one row per student
+-- ------------------------------------------------------------
+CREATE TABLE students (
+    student_id      INT AUTO_INCREMENT PRIMARY KEY,
+    full_name       VARCHAR(100)   NOT NULL,
+    email           VARCHAR(100)   NOT NULL UNIQUE,
+    phone           VARCHAR(15),
+    branch          ENUM('CSE','IT','ECE','EEE','MECH','CIVIL') NOT NULL,
+    year_of_study   TINYINT        NOT NULL CHECK (year_of_study BETWEEN 1 AND 4),
+    cgpa            DECIMAL(4,2)   NOT NULL CHECK (cgpa BETWEEN 0.00 AND 10.00),
+    active_backlogs TINYINT        DEFAULT 0,
+    gender          ENUM('Male','Female','Other'),
+    city            VARCHAR(60),
+    enrolled_on     DATE           DEFAULT (CURRENT_DATE),
+    INDEX idx_branch (branch),
+    INDEX idx_cgpa   (cgpa)
+);
+
+-- ------------------------------------------------------------
+-- TABLE 2 : skills
+-- Technical & soft skills with self-rated proficiency (1–5)
+-- ------------------------------------------------------------
+CREATE TABLE skills (
+    skill_id        INT AUTO_INCREMENT PRIMARY KEY,
+    student_id      INT            NOT NULL,
+    skill_name      VARCHAR(80)    NOT NULL,
+    skill_category  ENUM('Technical','Soft','Domain') NOT NULL,
+    proficiency     TINYINT        NOT NULL CHECK (proficiency BETWEEN 1 AND 5),
+    FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE CASCADE,
+    INDEX idx_student_skill (student_id)
+);
+
+-- ------------------------------------------------------------
+-- TABLE 3 : certifications
+-- Online / offline certifications completed
+-- ------------------------------------------------------------
+CREATE TABLE certifications (
+    cert_id         INT AUTO_INCREMENT PRIMARY KEY,
+    student_id      INT            NOT NULL,
+    cert_name       VARCHAR(120)   NOT NULL,
+    issuing_org     VARCHAR(80),
+    completion_date DATE,
+    score_percent   DECIMAL(5,2)   CHECK (score_percent BETWEEN 0 AND 100),
+    FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE CASCADE,
+    INDEX idx_student_cert (student_id)
+);
+
+-- ------------------------------------------------------------
+-- TABLE 4 : internships
+-- Internship experience (duration in weeks)
+-- ------------------------------------------------------------
+CREATE TABLE internships (
+    intern_id       INT AUTO_INCREMENT PRIMARY KEY,
+    student_id      INT            NOT NULL,
+    company_name    VARCHAR(100)   NOT NULL,
+    role            VARCHAR(100),
+    duration_weeks  TINYINT        NOT NULL CHECK (duration_weeks > 0),
+    stipend         DECIMAL(8,2)   DEFAULT 0,
+    is_paid         BOOLEAN        DEFAULT FALSE,
+    start_date      DATE,
+    end_date        DATE,
+    FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE CASCADE,
+    INDEX idx_student_intern (student_id)
+);
+
+-- ------------------------------------------------------------
+-- TABLE 5 : projects
+-- Academic or personal projects with complexity level
+-- ------------------------------------------------------------
+CREATE TABLE projects (
+    project_id      INT AUTO_INCREMENT PRIMARY KEY,
+    student_id      INT            NOT NULL,
+    project_title   VARCHAR(150)   NOT NULL,
+    tech_stack      VARCHAR(200),
+    complexity      ENUM('Basic','Intermediate','Advanced') NOT NULL,
+    has_github      BOOLEAN        DEFAULT FALSE,
+    is_deployed     BOOLEAN        DEFAULT FALSE,
+    completion_date DATE,
+    FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE CASCADE,
+    INDEX idx_student_project (student_id)
+);
+
+-- ------------------------------------------------------------
+-- TABLE 6 : mock_tests
+-- Aptitude, Coding, and HR mock interview scores (0–100)
+-- ------------------------------------------------------------
+CREATE TABLE mock_tests (
+    test_id         INT AUTO_INCREMENT PRIMARY KEY,
+    student_id      INT            NOT NULL,
+    test_type       ENUM('Aptitude','Coding','Communication','HR') NOT NULL,
+    score           DECIMAL(5,2)   NOT NULL CHECK (score BETWEEN 0 AND 100),
+    max_score       DECIMAL(5,2)   DEFAULT 100,
+    test_date       DATE,
+    attempt_number  TINYINT        DEFAULT 1,
+    FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE CASCADE,
+    INDEX idx_student_test (student_id),
+    INDEX idx_test_type    (test_type)
+);
+
+-- ------------------------------------------------------------
+-- TABLE 7 : placement_score  (computed — populated by VIEW / SP)
+-- Stores the final weighted Placement Readiness Score per student
+-- ------------------------------------------------------------
+CREATE TABLE placement_score (
+    score_id              INT AUTO_INCREMENT PRIMARY KEY,
+    student_id            INT            NOT NULL UNIQUE,
+    academic_score        DECIMAL(5,2)   DEFAULT 0  COMMENT 'Max 25 pts',
+    skills_score          DECIMAL(5,2)   DEFAULT 0  COMMENT 'Max 20 pts',
+    certifications_score  DECIMAL(5,2)   DEFAULT 0  COMMENT 'Max 10 pts',
+    internship_score      DECIMAL(5,2)   DEFAULT 0  COMMENT 'Max 20 pts',
+    projects_score        DECIMAL(5,2)   DEFAULT 0  COMMENT 'Max 15 pts',
+    mock_test_score       DECIMAL(5,2)   DEFAULT 0  COMMENT 'Max 10 pts',
+    total_score           DECIMAL(5,2)   DEFAULT 0  COMMENT 'Max 100 pts',
+    readiness_band        ENUM('High','Medium','Low') DEFAULT 'Low',
+    last_updated          TIMESTAMP      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (student_id) REFERENCES students(student_id) ON DELETE CASCADE
+);
+
+SHOW tables;
+
+-- ============================================================
+--  PLACEMENT READINESS ANALYTICS SYSTEM
+--  Phase 2 : Sample Data Insertion (MySQL)
+--  50+ Engineering / IT Students — All 7 Tables
+-- ============================================================
+
+USE placement_readiness;
+
+-- ============================================================
+-- TABLE 1 : students (55 records)
+-- ============================================================
+
+INSERT INTO students (full_name, email, phone, branch, year_of_study, cgpa, active_backlogs, gender, city, enrolled_on) VALUES
+('Aarav Sharma',       'aarav.sharma@example.com',       '9876543210', 'CSE',   4, 8.75, 0, 'Male',   'Chennai',    '2021-08-01'),
+('Priya Nair',         'priya.nair@example.com',         '9876543211', 'IT',    4, 9.10, 0, 'Female', 'Bangalore',  '2021-08-01'),
+('Karan Mehta',        'karan.mehta@example.com',        '9876543212', 'ECE',   3, 7.40, 1, 'Male',   'Mumbai',     '2022-08-01'),
+('Sneha Reddy',        'sneha.reddy@example.com',        '9876543213', 'CSE',   4, 9.50, 0, 'Female', 'Hyderabad',  '2021-08-01'),
+('Rohan Das',          'rohan.das@example.com',          '9876543214', 'MECH',  2, 6.20, 2, 'Male',   'Kolkata',    '2023-08-01'),
+('Ananya Singh',       'ananya.singh@example.com',       '9876543215', 'IT',    3, 8.30, 0, 'Female', 'Delhi',      '2022-08-01'),
+('Vikram Patel',       'vikram.patel@example.com',       '9876543216', 'CSE',   4, 7.90, 0, 'Male',   'Ahmedabad',  '2021-08-01'),
+('Divya Krishnan',     'divya.krishnan@example.com',     '9876543217', 'EEE',   3, 8.00, 0, 'Female', 'Chennai',    '2022-08-01'),
+('Rahul Gupta',        'rahul.gupta@example.com',        '9876543218', 'CSE',   4, 6.80, 1, 'Male',   'Lucknow',    '2021-08-01'),
+('Meera Joshi',        'meera.joshi@example.com',        '9876543219', 'IT',    4, 9.20, 0, 'Female', 'Pune',       '2021-08-01'),
+('Aditya Kumar',       'aditya.kumar@example.com',       '9876543220', 'CSE',   3, 8.60, 0, 'Male',   'Bangalore',  '2022-08-01'),
+('Pooja Iyer',         'pooja.iyer@example.com',         '9876543221', 'ECE',   4, 7.20, 0, 'Female', 'Coimbatore', '2021-08-01'),
+('Siddharth Roy',      'siddharth.roy@example.com',      '9876543222', 'IT',    4, 8.90, 0, 'Male',   'Kolkata',    '2021-08-01'),
+('Lakshmi Venkat',     'lakshmi.venkat@example.com',     '9876543223', 'CSE',   2, 7.50, 0, 'Female', 'Chennai',    '2023-08-01'),
+('Nikhil Tiwari',      'nikhil.tiwari@example.com',      '9876543224', 'MECH',  3, 5.90, 3, 'Male',   'Bhopal',     '2022-08-01'),
+('Kavya Pillai',       'kavya.pillai@example.com',       '9876543225', 'IT',    4, 9.00, 0, 'Female', 'Trivandrum', '2021-08-01'),
+('Arjun Malhotra',     'arjun.malhotra@example.com',     '9876543226', 'CSE',   4, 8.20, 0, 'Male',   'Delhi',      '2021-08-01'),
+('Shreya Bhat',        'shreya.bhat@example.com',        '9876543227', 'ECE',   3, 7.80, 0, 'Female', 'Mangalore',  '2022-08-01'),
+('Tarun Yadav',        'tarun.yadav@example.com',        '9876543228', 'EEE',   4, 6.50, 2, 'Male',   'Jaipur',     '2021-08-01'),
+('Nisha Menon',        'nisha.menon@example.com',        '9876543229', 'CSE',   3, 8.40, 0, 'Female', 'Kochi',      '2022-08-01'),
+('Harsh Vardhan',      'harsh.vardhan@example.com',      '9876543230', 'IT',    4, 7.60, 0, 'Male',   'Chandigarh', '2021-08-01'),
+('Ritu Agarwal',       'ritu.agarwal@example.com',       '9876543231', 'CSE',   4, 9.30, 0, 'Female', 'Agra',       '2021-08-01'),
+('Manoj Sinha',        'manoj.sinha@example.com',        '9876543232', 'MECH',  2, 5.50, 4, 'Male',   'Patna',      '2023-08-01'),
+('Deepika Nanda',      'deepika.nanda@example.com',      '9876543233', 'IT',    3, 8.70, 0, 'Female', 'Bhubaneswar','2022-08-01'),
+('Saurabh Tripathi',   'saurabh.tripathi@example.com',   '9876543234', 'CSE',   4, 7.10, 1, 'Male',   'Varanasi',   '2021-08-01'),
+('Aditi Saxena',       'aditi.saxena@example.com',       '9876543235', 'ECE',   4, 8.50, 0, 'Female', 'Noida',      '2021-08-01'),
+('Pranav Desai',       'pranav.desai@example.com',       '9876543236', 'IT',    3, 7.30, 0, 'Male',   'Surat',      '2022-08-01'),
+('Swati Kulkarni',     'swati.kulkarni@example.com',     '9876543237', 'CSE',   4, 8.80, 0, 'Female', 'Nagpur',     '2021-08-01'),
+('Kunal Bajaj',        'kunal.bajaj@example.com',        '9876543238', 'EEE',   3, 6.90, 1, 'Male',   'Indore',     '2022-08-01'),
+('Isha Pandey',        'isha.pandey@example.com',        '9876543239', 'IT',    4, 9.40, 0, 'Female', 'Allahabad',  '2021-08-01'),
+('Abhishek Rao',       'abhishek.rao@example.com',       '9876543240', 'CSE',   2, 7.70, 0, 'Male',   'Mysore',     '2023-08-01'),
+('Tanvi Shah',         'tanvi.shah@example.com',         '9876543241', 'IT',    4, 8.10, 0, 'Female', 'Vadodara',   '2021-08-01'),
+('Gaurav Mishra',      'gaurav.mishra@example.com',      '9876543242', 'MECH',  3, 6.30, 2, 'Male',   'Gwalior',    '2022-08-01'),
+('Anjali Verma',       'anjali.verma@example.com',       '9876543243', 'CSE',   4, 9.00, 0, 'Female', 'Lucknow',    '2021-08-01'),
+('Rohit Kapoor',       'rohit.kapoor@example.com',       '9876543244', 'ECE',   3, 7.60, 0, 'Male',   'Amritsar',   '2022-08-01'),
+('Pallavi Shetty',     'pallavi.shetty@example.com',     '9876543245', 'IT',    4, 8.60, 0, 'Female', 'Mangalore',  '2021-08-01'),
+('Yash Agrawal',       'yash.agrawal@example.com',       '9876543246', 'CSE',   4, 7.40, 0, 'Male',   'Raipur',     '2021-08-01'),
+('Simran Kaur',        'simran.kaur@example.com',        '9876543247', 'IT',    3, 8.90, 0, 'Female', 'Ludhiana',   '2022-08-01'),
+('Varun Nair',         'varun.nair@example.com',         '9876543248', 'EEE',   4, 6.70, 1, 'Male',   'Kochi',      '2021-08-01'),
+('Bhavna Chawla',      'bhavna.chawla@example.com',      '9876543249', 'CSE',   4, 8.30, 0, 'Female', 'Delhi',      '2021-08-01'),
+('Lokesh Babu',        'lokesh.babu@example.com',        '9876543250', 'IT',    2, 7.20, 0, 'Male',   'Hyderabad',  '2023-08-01'),
+('Preethi Suresh',     'preethi.suresh@example.com',     '9876543251', 'CSE',   4, 9.10, 0, 'Female', 'Chennai',    '2021-08-01'),
+('Suresh Babu',        'suresh.babu@example.com',        '9876543252', 'MECH',  3, 5.70, 3, 'Male',   'Trichy',     '2022-08-01'),
+('Harini Rajan',       'harini.rajan@example.com',       '9876543253', 'IT',    4, 8.40, 0, 'Female', 'Bangalore',  '2021-08-01'),
+('Amit Chaudhary',     'amit.chaudhary@example.com',     '9876543254', 'CSE',   4, 7.00, 1, 'Male',   'Meerut',     '2021-08-01'),
+('Sonali Patil',       'sonali.patil@example.com',       '9876543255', 'ECE',   3, 8.20, 0, 'Female', 'Nashik',     '2022-08-01'),
+('Dev Anand',          'dev.anand@example.com',          '9876543256', 'IT',    4, 7.80, 0, 'Male',   'Pune',       '2021-08-01'),
+('Kritika Jain',       'kritika.jain@example.com',       '9876543257', 'CSE',   4, 9.20, 0, 'Female', 'Jaipur',     '2021-08-01'),
+('Sumit Bose',         'sumit.bose@example.com',         '9876543258', 'EEE',   2, 6.60, 0, 'Male',   'Kolkata',    '2023-08-01'),
+('Madhu Latha',        'madhu.latha@example.com',        '9876543259', 'CSE',   4, 8.70, 0, 'Female', 'Vizag',      '2021-08-01'),
+('Rajan Pillai',       'rajan.pillai@example.com',       '9876543260', 'IT',    3, 7.50, 0, 'Male',   'Trivandrum', '2022-08-01'),
+('Chitra Moorthy',     'chitra.moorthy@example.com',     '9876543261', 'CSE',   4, 8.00, 0, 'Female', 'Coimbatore', '2021-08-01'),
+('Nitin Arora',        'nitin.arora@example.com',        '9876543262', 'MECH',  4, 5.30, 4, 'Male',   'Faridabad',  '2021-08-01'),
+('Poornima Devi',      'poornima.devi@example.com',      '9876543263', 'IT',    3, 8.60, 0, 'Female', 'Mysore',     '2022-08-01'),
+('Sanjay Rawat',       'sanjay.rawat@example.com',       '9876543264', 'ECE',   4, 7.30, 0, 'Male',   'Dehradun',   '2021-08-01'),
+('Vandana Krishnan',   'vandana.krishnan@example.com',   '9876543265', 'CSE',   4, 9.00, 0, 'Female', 'Chennai',    '2021-08-01');
+
+-- ============================================================
+-- TABLE 2 : skills (2–4 skills per student, ~130 records)
+-- ============================================================
+
+INSERT INTO skills (student_id, skill_name, skill_category, proficiency) VALUES
+-- Aarav Sharma (1)
+(1,  'Python',            'Technical', 5),
+(1,  'Machine Learning',  'Technical', 4),
+(1,  'Communication',     'Soft',      4),
+(1,  'Data Analysis',     'Domain',    4),
+-- Priya Nair (2)
+(2,  'Java',              'Technical', 5),
+(2,  'Spring Boot',       'Technical', 4),
+(2,  'SQL',               'Technical', 5),
+(2,  'Leadership',        'Soft',      5),
+-- Karan Mehta (3)
+(3,  'C++',               'Technical', 3),
+(3,  'Embedded Systems',  'Domain',    3),
+(3,  'Teamwork',          'Soft',      4),
+-- Sneha Reddy (4)
+(4,  'Python',            'Technical', 5),
+(4,  'Deep Learning',     'Technical', 5),
+(4,  'TensorFlow',        'Technical', 4),
+(4,  'Research',          'Domain',    5),
+-- Rohan Das (5)
+(5,  'AutoCAD',           'Technical', 2),
+(5,  'C',                 'Technical', 2),
+-- Ananya Singh (6)
+(6,  'JavaScript',        'Technical', 4),
+(6,  'React',             'Technical', 4),
+(6,  'Node.js',           'Technical', 3),
+(6,  'Problem Solving',   'Soft',      4),
+-- Vikram Patel (7)
+(7,  'Java',              'Technical', 4),
+(7,  'Android Dev',       'Technical', 4),
+(7,  'Firebase',          'Technical', 3),
+-- Divya Krishnan (8)
+(8,  'MATLAB',            'Technical', 4),
+(8,  'Python',            'Technical', 3),
+(8,  'Signal Processing', 'Domain',    4),
+-- Rahul Gupta (9)
+(9,  'C',                 'Technical', 3),
+(9,  'HTML/CSS',          'Technical', 3),
+(9,  'Critical Thinking', 'Soft',      3),
+-- Meera Joshi (10)
+(10, 'Python',            'Technical', 5),
+(10, 'Power BI',          'Technical', 5),
+(10, 'SQL',               'Technical', 5),
+(10, 'Data Visualization','Domain',    5),
+-- Aditya Kumar (11)
+(11, 'Go',                'Technical', 4),
+(11, 'Docker',            'Technical', 4),
+(11, 'Kubernetes',        'Technical', 3),
+(11, 'DevOps',            'Domain',    4),
+-- Pooja Iyer (12)
+(12, 'VLSI',              'Domain',    4),
+(12, 'Verilog',           'Technical', 3),
+(12, 'Communication',     'Soft',      4),
+-- Siddharth Roy (13)
+(13, 'Python',            'Technical', 5),
+(13, 'Flask',             'Technical', 4),
+(13, 'PostgreSQL',        'Technical', 4),
+(13, 'Agile',             'Domain',    4),
+-- Lakshmi Venkat (14)
+(14, 'Java',              'Technical', 3),
+(14, 'MySQL',             'Technical', 3),
+(14, 'Teamwork',          'Soft',      4),
+-- Nikhil Tiwari (15)
+(15, 'AutoCAD',           'Technical', 2),
+(15, 'Solidworks',        'Technical', 2),
+-- Kavya Pillai (16)
+(16, 'Python',            'Technical', 5),
+(16, 'NLP',               'Technical', 4),
+(16, 'Scikit-learn',      'Technical', 4),
+(16, 'Research',          'Domain',    5),
+-- Arjun Malhotra (17)
+(17, 'C++',               'Technical', 4),
+(17, 'DSA',               'Technical', 5),
+(17, 'System Design',     'Domain',    4),
+-- Shreya Bhat (18)
+(18, 'Embedded C',        'Technical', 4),
+(18, 'IoT',               'Domain',    4),
+(18, 'Communication',     'Soft',      4),
+-- Tarun Yadav (19)
+(19, 'PLC Programming',   'Technical', 3),
+(19, 'AutoCAD',           'Technical', 2),
+-- Nisha Menon (20)
+(20, 'Python',            'Technical', 4),
+(20, 'Django',            'Technical', 4),
+(20, 'REST APIs',         'Technical', 4),
+-- Harsh Vardhan (21)
+(21, 'JavaScript',        'Technical', 4),
+(21, 'Vue.js',            'Technical', 3),
+(21, 'MongoDB',           'Technical', 3),
+-- Ritu Agarwal (22)
+(22, 'Python',            'Technical', 5),
+(22, 'Data Science',      'Domain',    5),
+(22, 'R',                 'Technical', 4),
+(22, 'Leadership',        'Soft',      5),
+-- Manoj Sinha (23)
+(23, 'AutoCAD',           'Technical', 2),
+-- Deepika Nanda (24)
+(24, 'Java',              'Technical', 4),
+(24, 'Microservices',     'Technical', 4),
+(24, 'AWS',               'Technical', 3),
+-- Saurabh Tripathi (25)
+(25, 'PHP',               'Technical', 3),
+(25, 'MySQL',             'Technical', 3),
+(25, 'Teamwork',          'Soft',      3),
+-- Aditi Saxena (26)
+(26, 'VLSI Design',       'Domain',    4),
+(26, 'Python',            'Technical', 4),
+(26, 'Communication',     'Soft',      5),
+-- Pranav Desai (27)
+(27, 'JavaScript',        'Technical', 4),
+(27, 'TypeScript',        'Technical', 3),
+(27, 'GraphQL',           'Technical', 3),
+-- Swati Kulkarni (28)
+(28, 'Python',            'Technical', 5),
+(28, 'Machine Learning',  'Technical', 5),
+(28, 'Pandas',            'Technical', 5),
+(28, 'Problem Solving',   'Soft',      5),
+-- Kunal Bajaj (29)
+(29, 'PLC',               'Technical', 3),
+(29, 'SCADA',             'Technical', 3),
+-- Isha Pandey (30)
+(30, 'Java',              'Technical', 5),
+(30, 'Spring Boot',       'Technical', 5),
+(30, 'Microservices',     'Technical', 4),
+(30, 'Leadership',        'Soft',      5),
+-- Abhishek Rao (31)
+(31, 'Python',            'Technical', 4),
+(31, 'SQL',               'Technical', 3),
+(31, 'Teamwork',          'Soft',      4),
+-- Tanvi Shah (32)
+(32, 'React',             'Technical', 4),
+(32, 'Redux',             'Technical', 4),
+(32, 'Node.js',           'Technical', 3),
+-- Gaurav Mishra (33)
+(33, 'Solidworks',        'Technical', 3),
+(33, 'C',                 'Technical', 2),
+-- Anjali Verma (34)
+(34, 'Python',            'Technical', 5),
+(34, 'Cybersecurity',     'Domain',    4),
+(34, 'Networking',        'Technical', 4),
+(34, 'Communication',     'Soft',      5),
+-- Rohit Kapoor (35)
+(35, 'C++',               'Technical', 4),
+(35, 'Signal Processing', 'Domain',    3),
+(35, 'MATLAB',            'Technical', 3),
+-- Pallavi Shetty (36)
+(36, 'Java',              'Technical', 5),
+(36, 'Hibernate',         'Technical', 4),
+(36, 'Spring MVC',        'Technical', 4),
+-- Yash Agrawal (37)
+(37, 'Python',            'Technical', 4),
+(37, 'Cloud Computing',   'Domain',    3),
+(37, 'Azure',             'Technical', 3),
+-- Simran Kaur (38)
+(38, 'Python',            'Technical', 5),
+(38, 'AI/ML',             'Domain',    5),
+(38, 'PyTorch',           'Technical', 4),
+(38, 'Research',          'Domain',    4),
+-- Varun Nair (39)
+(39, 'Power Systems',     'Domain',    3),
+(39, 'MATLAB',            'Technical', 3),
+-- Bhavna Chawla (40)
+(40, 'Java',              'Technical', 4),
+(40, 'SQL',               'Technical', 4),
+(40, 'Problem Solving',   'Soft',      4),
+-- Lokesh Babu (41)
+(41, 'Python',            'Technical', 3),
+(41, 'HTML/CSS',          'Technical', 3),
+-- Preethi Suresh (42)
+(42, 'Python',            'Technical', 5),
+(42, 'Data Engineering',  'Domain',    5),
+(42, 'Apache Spark',      'Technical', 4),
+(42, 'Leadership',        'Soft',      5),
+-- Suresh Babu (43)
+(43, 'AutoCAD',           'Technical', 2),
+(43, 'C',                 'Technical', 2),
+-- Harini Rajan (44)
+(44, 'Java',              'Technical', 4),
+(44, 'Kotlin',            'Technical', 4),
+(44, 'Android Dev',       'Technical', 4),
+-- Amit Chaudhary (45)
+(45, 'C++',               'Technical', 3),
+(45, 'DSA',               'Technical', 3),
+(45, 'Teamwork',          'Soft',      3),
+-- Sonali Patil (46)
+(46, 'Python',            'Technical', 4),
+(46, 'IoT',               'Domain',    4),
+(46, 'Arduino',           'Technical', 3),
+-- Dev Anand (47)
+(47, 'JavaScript',        'Technical', 4),
+(47, 'Angular',           'Technical', 4),
+(47, 'TypeScript',        'Technical', 3),
+-- Kritika Jain (48)
+(48, 'Python',            'Technical', 5),
+(48, 'Blockchain',        'Domain',    4),
+(48, 'Solidity',          'Technical', 4),
+(48, 'Communication',     'Soft',      5),
+-- Sumit Bose (49)
+(49, 'MATLAB',            'Technical', 3),
+(49, 'Circuit Design',    'Domain',    3),
+-- Madhu Latha (50)
+(50, 'Python',            'Technical', 5),
+(50, 'NLP',               'Technical', 4),
+(50, 'Keras',             'Technical', 4),
+(50, 'Research',          'Domain',    5),
+-- Rajan Pillai (51)
+(51, 'JavaScript',        'Technical', 4),
+(51, 'React Native',      'Technical', 3),
+(51, 'Node.js',           'Technical', 3),
+-- Chitra Moorthy (52)
+(52, 'Java',              'Technical', 4),
+(52, 'SQL',               'Technical', 4),
+(52, 'Cloud Computing',   'Domain',    3),
+-- Nitin Arora (53)
+(53, 'AutoCAD',           'Technical', 2),
+-- Poornima Devi (54)
+(54, 'Python',            'Technical', 5),
+(54, 'Data Analytics',    'Domain',    4),
+(54, 'Tableau',           'Technical', 4),
+-- Sanjay Rawat (55)
+(55, 'C++',               'Technical', 3),
+(55, 'Embedded Systems',  'Domain',    3),
+(55, 'MATLAB',            'Technical', 3),
+-- Vandana Krishnan (56)
+(56, 'Python',            'Technical', 5),
+(56, 'Machine Learning',  'Technical', 5),
+(56, 'SQL',               'Technical', 5),
+(56, 'Leadership',        'Soft',      5);
+
+
+-- ============================================================
+-- TABLE 3 : certifications (~90 records)
+-- ============================================================
+
+INSERT INTO certifications (student_id, cert_name, issuing_org, completion_date, score_percent) VALUES
+(1,  'Python for Data Science',          'Coursera',   '2024-01-15', 92.00),
+(1,  'AWS Cloud Practitioner',           'Amazon',     '2024-03-10', 88.00),
+(2,  'Java SE 11 Developer',             'Oracle',     '2023-11-20', 95.00),
+(2,  'Spring Professional Certification','VMware',     '2024-02-14', 90.00),
+(3,  'NPTEL Embedded Systems',           'NPTEL',      '2024-01-10', 72.00),
+(4,  'Deep Learning Specialization',     'Coursera',   '2023-09-05', 97.00),
+(4,  'TensorFlow Developer',             'Google',     '2024-01-20', 94.00),
+(4,  'AI for Everyone',                  'Coursera',   '2023-06-12', 98.00),
+(6,  'Meta Front-End Developer',         'Coursera',   '2024-02-28', 91.00),
+(6,  'JavaScript Algorithms',            'freeCodeCamp','2023-12-01',87.00),
+(7,  'Android App Development',          'Udacity',    '2023-10-15', 85.00),
+(8,  'MATLAB Onramp',                    'MathWorks',  '2023-11-01', 89.00),
+(10, 'Google Data Analytics',            'Coursera',   '2024-01-05', 96.00),
+(10, 'Microsoft Power BI Analyst',       'Microsoft',  '2024-03-01', 93.00),
+(10, 'IBM Data Science Professional',    'Coursera',   '2023-08-18', 95.00),
+(11, 'Docker Certified Associate',       'Docker Inc', '2023-12-10', 88.00),
+(11, 'Kubernetes Administrator',         'CNCF',       '2024-02-05', 86.00),
+(13, 'Python Flask & REST APIs',         'Udemy',      '2023-10-10', 90.00),
+(13, 'PostgreSQL for Developers',        'Udemy',      '2024-01-22', 88.00),
+(16, 'NLP with Python',                  'Coursera',   '2024-03-15', 94.00),
+(16, 'Hugging Face NLP',                 'Hugging Face','2024-04-01', 91.00),
+(17, 'Data Structures & Algorithms',     'Coursera',   '2023-07-20', 93.00),
+(17, 'System Design Primer',             'Udemy',      '2024-01-10', 89.00),
+(18, 'IoT Fundamentals',                 'Cisco',      '2024-02-01', 87.00),
+(20, 'Django REST Framework',            'Udemy',      '2023-11-15', 88.00),
+(20, 'AWS Solutions Architect',          'Amazon',     '2024-03-20', 85.00),
+(21, 'Vue.js Complete Guide',            'Udemy',      '2023-09-10', 83.00),
+(22, 'IBM Data Science',                 'Coursera',   '2023-06-01', 97.00),
+(22, 'SAS Statistical Programming',      'SAS',        '2023-10-20', 91.00),
+(22, 'Google Advanced Data Analytics',   'Coursera',   '2024-02-10', 96.00),
+(24, 'AWS Developer Associate',          'Amazon',     '2024-01-08', 89.00),
+(24, 'Microservices with Java',          'Udemy',      '2023-11-28', 87.00),
+(26, 'NPTEL VLSI Design',                'NPTEL',      '2024-01-30', 88.00),
+(27, 'TypeScript Bootcamp',              'Udemy',      '2023-12-05', 85.00),
+(28, 'Applied Machine Learning',         'Coursera',   '2023-08-20', 96.00),
+(28, 'Pandas & NumPy Masterclass',       'Udemy',      '2023-10-01', 93.00),
+(28, 'Kaggle ML Intermediate',           'Kaggle',     '2024-02-20', 95.00),
+(30, 'Java Spring Boot Masterclass',     'Udemy',      '2023-09-15', 94.00),
+(30, 'Microservices Architecture',       'Pluralsight', '2024-01-18', 92.00),
+(30, 'Oracle Java Certified',            'Oracle',     '2023-12-20', 96.00),
+(32, 'React Complete Guide',             'Udemy',      '2023-11-10', 90.00),
+(34, 'CompTIA Security+',                'CompTIA',    '2024-02-05', 91.00),
+(34, 'Ethical Hacking',                  'EC-Council', '2023-12-15', 88.00),
+(36, 'Java EE & Hibernate',              'Udemy',      '2023-10-25', 90.00),
+(37, 'Azure Fundamentals AZ-900',        'Microsoft',  '2024-01-25', 86.00),
+(38, 'Deep Learning with PyTorch',       'Coursera',   '2023-11-01', 95.00),
+(38, 'AI Research Methods',              'Coursera',   '2024-02-28', 93.00),
+(40, 'Java Programming Masterclass',     'Udemy',      '2023-12-01', 87.00),
+(42, 'Apache Spark for Data Engineers',  'Coursera',   '2023-08-05', 96.00),
+(42, 'Google Cloud Data Engineer',       'Google',     '2024-03-10', 94.00),
+(42, 'DataBricks Lakehouse Fundamentals','Databricks', '2024-01-30', 91.00),
+(44, 'Kotlin for Android',               'JetBrains',  '2024-01-10', 90.00),
+(46, 'IoT with Arduino',                 'Coursera',   '2024-02-15', 85.00),
+(47, 'Angular Complete Guide',           'Udemy',      '2023-11-20', 88.00),
+(48, 'Blockchain Basics',                'Coursera',   '2023-09-01', 93.00),
+(48, 'Ethereum & Solidity',              'Udemy',      '2024-01-05', 91.00),
+(50, 'NLP Specialization',               'Coursera',   '2023-10-15', 95.00),
+(50, 'Hugging Face Transformers',        'Hugging Face','2024-02-20', 92.00),
+(52, 'AWS Cloud Practitioner',           'Amazon',     '2024-01-20', 86.00),
+(54, 'Tableau Desktop Specialist',       'Tableau',    '2024-02-10', 91.00),
+(54, 'Google Data Analytics Certificate','Coursera',   '2023-12-15', 93.00),
+(56, 'TensorFlow Developer Certificate', 'Google',     '2024-03-01', 96.00),
+(56, 'Deep Learning Specialization',     'Coursera',   '2023-09-20', 97.00),
+(56, 'SQL for Data Science',             'Coursera',   '2023-07-10', 94.00);
+
+-- ============================================================
+-- TABLE 4 : internships (~60 records)
+-- ============================================================
+
+INSERT INTO internships (student_id, company_name, role, duration_weeks, stipend, is_paid, start_date, end_date) VALUES
+(1,  'TCS',              'ML Intern',               8,  15000.00, TRUE,  '2024-05-01', '2024-06-26'),
+(1,  'Infosys',          'Data Analyst Intern',     6,  12000.00, TRUE,  '2023-12-01', '2024-01-12'),
+(2,  'Wipro',            'Java Developer Intern',  12,  18000.00, TRUE,  '2024-05-01', '2024-07-24'),
+(3,  'BSNL',             'Network Intern',          4,      0.00, FALSE, '2024-01-10', '2024-02-07'),
+(4,  'Google',           'AI Research Intern',     12,  40000.00, TRUE,  '2023-12-01', '2024-02-22'),
+(4,  'Microsoft',        'Software Intern',        10,  35000.00, TRUE,  '2024-05-01', '2024-07-10'),
+(6,  'Zoho',             'Frontend Intern',         8,  14000.00, TRUE,  '2024-01-15', '2024-03-12'),
+(7,  'Tech Mahindra',    'Android Intern',          8,  12000.00, TRUE,  '2024-05-05', '2024-06-30'),
+(9,  'HCL',              'Support Intern',          4,   8000.00, TRUE,  '2023-12-10', '2024-01-07'),
+(10, 'Amazon',           'Data Science Intern',    16,  45000.00, TRUE,  '2024-05-01', '2024-08-22'),
+(10, 'Deloitte',         'Analytics Intern',       12,  30000.00, TRUE,  '2024-01-01', '2024-03-28'),
+(11, 'Flipkart',         'DevOps Intern',          10,  20000.00, TRUE,  '2024-03-01', '2024-05-10'),
+(13, 'Razorpay',         'Backend Intern',          8,  22000.00, TRUE,  '2024-01-10', '2024-03-07'),
+(16, 'Samsung Research', 'AI/NLP Intern',          12,  35000.00, TRUE,  '2024-05-01', '2024-07-24'),
+(17, 'Adobe',            'Software Intern',        10,  28000.00, TRUE,  '2024-01-15', '2024-03-26'),
+(18, 'Bosch',            'Embedded Intern',         8,  16000.00, TRUE,  '2024-05-01', '2024-06-26'),
+(20, 'Freshworks',       'Backend Intern',          8,  18000.00, TRUE,  '2024-01-10', '2024-03-07'),
+(22, 'KPMG',             'Data Science Intern',    16,  40000.00, TRUE,  '2024-05-01', '2024-08-22'),
+(22, 'PwC',              'Analytics Intern',       12,  32000.00, TRUE,  '2023-12-01', '2024-02-22'),
+(24, 'Capgemini',        'Java Intern',             8,  15000.00, TRUE,  '2024-01-20', '2024-03-15'),
+(26, 'Texas Instruments','Chip Design Intern',     10,  20000.00, TRUE,  '2024-05-01', '2024-07-10'),
+(28, 'Mu Sigma',         'ML Intern',              12,  25000.00, TRUE,  '2024-01-05', '2024-03-29'),
+(28, 'Nvidia',           'AI Intern',              16,  50000.00, TRUE,  '2024-05-01', '2024-08-22'),
+(30, 'PayPal',           'Java Backend Intern',    12,  35000.00, TRUE,  '2024-01-08', '2024-04-02'),
+(32, 'Swiggy',           'Frontend Intern',         8,  16000.00, TRUE,  '2024-03-01', '2024-04-26'),
+(34, 'CERT-In',          'Cyber Security Intern',  10,  20000.00, TRUE,  '2024-01-10', '2024-03-21'),
+(36, 'Infosys',          'Java Intern',            10,  15000.00, TRUE,  '2024-05-01', '2024-07-10'),
+(38, 'OpenAI (Remote)',  'Research Intern',        12,  55000.00, TRUE,  '2024-01-01', '2024-03-28'),
+(40, 'Accenture',        'Tech Support Intern',     6,  10000.00, TRUE,  '2023-12-05', '2024-01-16'),
+(42, 'PhonePe',          'Data Engineer Intern',   12,  40000.00, TRUE,  '2024-05-01', '2024-07-24'),
+(44, 'Mindtree',         'Android Intern',          8,  14000.00, TRUE,  '2024-01-20', '2024-03-15'),
+(46, 'IoTechWorld',      'IoT Developer Intern',    6,  12000.00, TRUE,  '2024-03-01', '2024-04-12'),
+(47, 'Ola',              'Frontend Intern',         8,  15000.00, TRUE,  '2024-01-15', '2024-03-12'),
+(48, 'Polygon Labs',     'Blockchain Intern',      12,  45000.00, TRUE,  '2024-05-01', '2024-07-24'),
+(50, 'DRDO',             'NLP Research Intern',    10,  22000.00, TRUE,  '2024-01-10', '2024-03-21'),
+(52, 'Mphasis',          'Cloud Intern',            6,  12000.00, TRUE,  '2024-02-01', '2024-03-15'),
+(54, 'Dun & Bradstreet', 'Data Analyst Intern',     8,  18000.00, TRUE,  '2024-01-08', '2024-03-05'),
+(56, 'IBM Research',     'Deep Learning Intern',   16,  50000.00, TRUE,  '2024-05-01', '2024-08-22');
+
+
+-- ============================================================
+-- TABLE 5 : projects (~90 records)
+-- ============================================================
+
+INSERT INTO projects (student_id, project_title, tech_stack, complexity, has_github, is_deployed, completion_date) VALUES
+(1,  'Student Performance Predictor',      'Python, Scikit-learn, Streamlit',          'Advanced',      TRUE,  TRUE,  '2024-02-10'),
+(1,  'Expense Tracker App',                'Python, Flask, SQLite',                    'Intermediate',  TRUE,  FALSE, '2023-10-05'),
+(2,  'Hospital Management System',         'Java, Spring Boot, MySQL',                 'Advanced',      TRUE,  TRUE,  '2024-01-15'),
+(2,  'E-Commerce REST API',                'Java, Spring Boot, Hibernate',             'Advanced',      TRUE,  FALSE, '2023-11-20'),
+(3,  'Traffic Signal Controller',          'C++, Embedded C',                          'Basic',         FALSE, FALSE, '2023-12-01'),
+(4,  'Cancer Cell Classification',         'Python, TensorFlow, Keras',                'Advanced',      TRUE,  TRUE,  '2024-03-01'),
+(4,  'NLP Sentiment Analyser',             'Python, BERT, Hugging Face',              'Advanced',      TRUE,  FALSE, '2023-09-15'),
+(6,  'Job Portal Website',                 'React, Node.js, MongoDB',                  'Intermediate',  TRUE,  TRUE,  '2024-01-20'),
+(6,  'Weather Dashboard',                  'JavaScript, OpenWeather API',              'Basic',         TRUE,  TRUE,  '2023-08-10'),
+(7,  'Food Delivery Android App',          'Kotlin, Firebase, Google Maps API',        'Advanced',      TRUE,  FALSE, '2024-02-15'),
+(8,  'Audio Signal Classifier',            'Python, MATLAB, Librosa',                  'Intermediate',  FALSE, FALSE, '2024-01-08'),
+(9,  'Student Portfolio Website',          'HTML, CSS, JavaScript',                    'Basic',         TRUE,  TRUE,  '2023-11-01'),
+(10, 'Placement Analytics Dashboard',      'Python, Power BI, SQL',                    'Advanced',      TRUE,  TRUE,  '2024-03-15'),
+(10, 'Customer Churn Predictor',           'Python, XGBoost, Streamlit',              'Advanced',      TRUE,  TRUE,  '2023-11-10'),
+(11, 'CI/CD Pipeline Automation',          'Docker, Kubernetes, Jenkins, GitHub Actions','Advanced',    TRUE,  TRUE,  '2024-02-20'),
+(11, 'Microservices Demo App',             'Go, Docker, Kubernetes',                   'Advanced',      TRUE,  FALSE, '2023-12-10'),
+(12, 'FPGA-based Arithmetic Unit',         'Verilog, Xilinx Vivado',                   'Intermediate',  FALSE, FALSE, '2024-01-12'),
+(13, 'Blog REST API',                      'Python, Flask, PostgreSQL',                'Intermediate',  TRUE,  TRUE,  '2023-10-20'),
+(13, 'Real-Time Chat App',                 'Flask, SocketIO, Redis',                   'Advanced',      TRUE,  FALSE, '2024-02-01'),
+(14, 'Library Management System',          'Java, MySQL, Swing',                       'Basic',         FALSE, FALSE, '2023-12-05'),
+(16, 'Fake News Detector',                 'Python, BERT, Streamlit',                  'Advanced',      TRUE,  TRUE,  '2024-02-28'),
+(16, 'AI Chatbot',                         'Python, Rasa, Hugging Face',              'Advanced',      TRUE,  FALSE, '2023-10-15'),
+(17, 'Online Judge Platform',              'C++, Python, Django, Redis',               'Advanced',      TRUE,  TRUE,  '2024-01-25'),
+(18, 'Smart Home Automation',              'Arduino, Raspberry Pi, C, IoT',            'Intermediate',  TRUE,  FALSE, '2024-02-10'),
+(20, 'Task Management API',                'Python, Django REST, PostgreSQL',          'Intermediate',  TRUE,  TRUE,  '2023-11-25'),
+(21, 'E-Learning Platform Frontend',       'Vue.js, Vuex, Firebase',                   'Intermediate',  TRUE,  TRUE,  '2023-12-15'),
+(22, 'Crime Data Analysis',                'R, Python, ggplot2, Tableau',              'Advanced',      TRUE,  TRUE,  '2024-03-10'),
+(22, 'Stock Price Predictor',              'Python, LSTM, Keras',                      'Advanced',      TRUE,  FALSE, '2023-11-01'),
+(24, 'Flight Booking Microservices',       'Java, Spring Cloud, RabbitMQ',             'Advanced',      TRUE,  FALSE, '2024-02-05'),
+(25, 'College Website',                    'PHP, MySQL, Bootstrap',                    'Basic',         TRUE,  TRUE,  '2023-10-01'),
+(26, 'Low Power VLSI Circuit Design',      'Cadence, Verilog',                         'Advanced',      FALSE, FALSE, '2024-02-20'),
+(27, 'GraphQL API',                        'Node.js, TypeScript, GraphQL',             'Intermediate',  TRUE,  FALSE, '2023-11-12'),
+(28, 'Fraud Detection System',             'Python, Random Forest, Kafka',             'Advanced',      TRUE,  TRUE,  '2024-03-05'),
+(28, 'Recommendation Engine',              'Python, Collaborative Filtering',          'Advanced',      TRUE,  FALSE, '2023-09-20'),
+(30, 'Banking System Backend',             'Java, Spring Boot, Microservices, MySQL',  'Advanced',      TRUE,  TRUE,  '2024-02-15'),
+(30, 'Payment Gateway Integration',        'Java, Stripe API, Spring Boot',            'Advanced',      TRUE,  FALSE, '2023-12-01'),
+(31, 'Student Grade Portal',               'Python, Flask, MySQL',                     'Basic',         TRUE,  FALSE, '2023-11-05'),
+(32, 'Social Media Clone',                 'React, Redux, Node.js, MongoDB',           'Advanced',      TRUE,  TRUE,  '2024-01-30'),
+(34, 'Network Intrusion Detection',        'Python, Scikit-learn, Wireshark',          'Advanced',      TRUE,  TRUE,  '2024-02-25'),
+(34, 'Password Manager App',               'Python, Flask, Cryptography',              'Intermediate',  TRUE,  FALSE, '2023-10-10'),
+(35, 'Spectrum Analyser',                  'MATLAB, Python, DSP',                      'Intermediate',  FALSE, FALSE, '2024-01-15'),
+(36, 'HR Management System',               'Java, Spring Boot, Hibernate, MySQL',      'Advanced',      TRUE,  TRUE,  '2024-02-10'),
+(37, 'Cloud File Storage App',             'Python, Azure Blob, FastAPI',              'Intermediate',  TRUE,  FALSE, '2024-01-20'),
+(38, 'Image Captioning System',            'Python, PyTorch, CLIP',                    'Advanced',      TRUE,  TRUE,  '2024-03-01'),
+(38, 'LLM Fine-Tuning Pipeline',           'Python, Hugging Face, LoRA',              'Advanced',      TRUE,  FALSE, '2024-01-15'),
+(40, 'Inventory Management System',        'Java, MySQL, JSP',                         'Intermediate',  TRUE,  FALSE, '2023-11-20'),
+(42, 'Real-Time Data Pipeline',            'Python, Spark, Kafka, Airflow',            'Advanced',      TRUE,  TRUE,  '2024-03-10'),
+(42, 'Data Lakehouse Architecture',        'Databricks, Delta Lake, Python',           'Advanced',      TRUE,  FALSE, '2024-01-08'),
+(44, 'Health & Fitness Tracker App',       'Kotlin, Jetpack Compose, Firebase',        'Advanced',      TRUE,  TRUE,  '2024-02-05'),
+(46, 'Smart Irrigation System',            'Arduino, Python, Sensors, IoT',            'Intermediate',  TRUE,  FALSE, '2024-01-25'),
+(47, 'News Aggregator App',                'Angular, TypeScript, NewsAPI',             'Intermediate',  TRUE,  TRUE,  '2023-12-20'),
+(48, 'Decentralized Voting App',           'Solidity, Ethereum, React, Web3.js',       'Advanced',      TRUE,  TRUE,  '2024-02-20'),
+(48, 'NFT Marketplace',                    'Solidity, IPFS, React',                    'Advanced',      TRUE,  FALSE, '2023-11-15'),
+(50, 'Medical Report NLP Summarizer',      'Python, Transformers, SpaCy',              'Advanced',      TRUE,  TRUE,  '2024-03-05'),
+(51, 'Food Recipe Mobile App',             'React Native, Firebase, Expo',             'Intermediate',  TRUE,  TRUE,  '2024-01-10'),
+(52, 'Online Exam Platform',               'Java, Spring Boot, MySQL, React',          'Advanced',      TRUE,  FALSE, '2024-02-01'),
+(54, 'Sales Analytics Dashboard',          'Python, Tableau, Power BI',                'Intermediate',  TRUE,  TRUE,  '2024-01-30'),
+(56, 'Brain Tumor Detection',              'Python, CNN, TensorFlow, Streamlit',       'Advanced',      TRUE,  TRUE,  '2024-03-12'),
+(56, 'Generative AI Image Tool',           'Python, Diffusion Models, Gradio',         'Advanced',      TRUE,  FALSE, '2024-01-20');
+
+
+-- ============================================================
+-- TABLE 6 : mock_tests (~150 records)
+-- ============================================================
+
+INSERT INTO mock_tests (student_id, test_type, score, max_score, test_date, attempt_number) VALUES
+-- Student 1 - Aarav
+(1,  'Aptitude',      82, 100, '2024-02-01', 1),
+(1,  'Coding',        88, 100, '2024-02-05', 1),
+(1,  'Communication', 78, 100, '2024-02-10', 1),
+(1,  'HR',            80, 100, '2024-02-15', 1),
+-- Student 2 - Priya
+(2,  'Aptitude',      90, 100, '2024-02-01', 1),
+(2,  'Coding',        94, 100, '2024-02-05', 1),
+(2,  'Communication', 88, 100, '2024-02-10', 1),
+(2,  'HR',            92, 100, '2024-02-15', 1),
+-- Student 3 - Karan
+(3,  'Aptitude',      62, 100, '2024-02-01', 1),
+(3,  'Coding',        58, 100, '2024-02-05', 1),
+(3,  'Communication', 70, 100, '2024-02-10', 1),
+(3,  'HR',            65, 100, '2024-02-15', 1),
+-- Student 4 - Sneha
+(4,  'Aptitude',      95, 100, '2024-02-01', 1),
+(4,  'Coding',        97, 100, '2024-02-05', 1),
+(4,  'Communication', 90, 100, '2024-02-10', 1),
+(4,  'HR',            93, 100, '2024-02-15', 1),
+-- Student 5 - Rohan
+(5,  'Aptitude',      45, 100, '2024-02-01', 1),
+(5,  'Coding',        35, 100, '2024-02-05', 1),
+(5,  'Communication', 55, 100, '2024-02-10', 1),
+(5,  'HR',            50, 100, '2024-02-15', 1),
+-- Student 6 - Ananya
+(6,  'Aptitude',      80, 100, '2024-02-01', 1),
+(6,  'Coding',        85, 100, '2024-02-05', 1),
+(6,  'Communication', 82, 100, '2024-02-10', 1),
+(6,  'HR',            78, 100, '2024-02-15', 1),
+-- Student 7 - Vikram
+(7,  'Aptitude',      75, 100, '2024-02-01', 1),
+(7,  'Coding',        80, 100, '2024-02-05', 1),
+(7,  'Communication', 72, 100, '2024-02-10', 1),
+(7,  'HR',            76, 100, '2024-02-15', 1),
+-- Student 8 - Divya
+(8,  'Aptitude',      78, 100, '2024-02-01', 1),
+(8,  'Coding',        72, 100, '2024-02-05', 1),
+(8,  'Communication', 80, 100, '2024-02-10', 1),
+(8,  'HR',            75, 100, '2024-02-15', 1),
+-- Student 9 - Rahul
+(9,  'Aptitude',      60, 100, '2024-02-01', 1),
+(9,  'Coding',        55, 100, '2024-02-05', 1),
+(9,  'Communication', 65, 100, '2024-02-10', 1),
+(9,  'HR',            62, 100, '2024-02-15', 1),
+-- Student 10 - Meera
+(10, 'Aptitude',      93, 100, '2024-02-01', 1),
+(10, 'Coding',        91, 100, '2024-02-05', 1),
+(10, 'Communication', 95, 100, '2024-02-10', 1),
+(10, 'HR',            94, 100, '2024-02-15', 1),
+-- Student 11 - Aditya
+(11, 'Aptitude',      85, 100, '2024-02-01', 1),
+(11, 'Coding',        90, 100, '2024-02-05', 1),
+(11, 'Communication', 80, 100, '2024-02-10', 1),
+(11, 'HR',            83, 100, '2024-02-15', 1),
+-- Student 12 - Pooja
+(12, 'Aptitude',      70, 100, '2024-02-01', 1),
+(12, 'Coding',        65, 100, '2024-02-05', 1),
+(12, 'Communication', 75, 100, '2024-02-10', 1),
+(12, 'HR',            72, 100, '2024-02-15', 1),
+-- Student 13 - Siddharth
+(13, 'Aptitude',      86, 100, '2024-02-01', 1),
+(13, 'Coding',        89, 100, '2024-02-05', 1),
+(13, 'Communication', 84, 100, '2024-02-10', 1),
+(13, 'HR',            87, 100, '2024-02-15', 1),
+-- Student 14 - Lakshmi
+(14, 'Aptitude',      68, 100, '2024-02-01', 1),
+(14, 'Coding',        63, 100, '2024-02-05', 1),
+(14, 'Communication', 72, 100, '2024-02-10', 1),
+(14, 'HR',            70, 100, '2024-02-15', 1),
+-- Student 15 - Nikhil
+(15, 'Aptitude',      42, 100, '2024-02-01', 1),
+(15, 'Coding',        38, 100, '2024-02-05', 1),
+(15, 'Communication', 50, 100, '2024-02-10', 1),
+(15, 'HR',            48, 100, '2024-02-15', 1),
+-- Student 16 - Kavya
+(16, 'Aptitude',      91, 100, '2024-02-01', 1),
+(16, 'Coding',        93, 100, '2024-02-05', 1),
+(16, 'Communication', 88, 100, '2024-02-10', 1),
+(16, 'HR',            90, 100, '2024-02-15', 1),
+-- Student 17 - Arjun
+(17, 'Aptitude',      88, 100, '2024-02-01', 1),
+(17, 'Coding',        92, 100, '2024-02-05', 1),
+(17, 'Communication', 82, 100, '2024-02-10', 1),
+(17, 'HR',            85, 100, '2024-02-15', 1),
+-- Student 18 - Shreya
+(18, 'Aptitude',      76, 100, '2024-02-01', 1),
+(18, 'Coding',        74, 100, '2024-02-05', 1),
+(18, 'Communication', 80, 100, '2024-02-10', 1),
+(18, 'HR',            78, 100, '2024-02-15', 1),
+-- Student 19 - Tarun
+(19, 'Aptitude',      55, 100, '2024-02-01', 1),
+(19, 'Coding',        48, 100, '2024-02-05', 1),
+(19, 'Communication', 62, 100, '2024-02-10', 1),
+(19, 'HR',            58, 100, '2024-02-15', 1),
+-- Student 20 - Nisha
+(20, 'Aptitude',      82, 100, '2024-02-01', 1),
+(20, 'Coding',        86, 100, '2024-02-05', 1),
+(20, 'Communication', 84, 100, '2024-02-10', 1),
+(20, 'HR',            80, 100, '2024-02-15', 1),
+-- Students 21-30
+(21, 'Aptitude',      73, 100, '2024-02-01', 1),
+(21, 'Coding',        77, 100, '2024-02-05', 1),
+(21, 'Communication', 75, 100, '2024-02-10', 1),
+(21, 'HR',            70, 100, '2024-02-15', 1),
+(22, 'Aptitude',      94, 100, '2024-02-01', 1),
+(22, 'Coding',        92, 100, '2024-02-05', 1),
+(22, 'Communication', 96, 100, '2024-02-10', 1),
+(22, 'HR',            95, 100, '2024-02-15', 1),
+(23, 'Aptitude',      38, 100, '2024-02-01', 1),
+(23, 'Coding',        30, 100, '2024-02-05', 1),
+(23, 'Communication', 45, 100, '2024-02-10', 1),
+(23, 'HR',            42, 100, '2024-02-15', 1),
+(24, 'Aptitude',      84, 100, '2024-02-01', 1),
+(24, 'Coding',        87, 100, '2024-02-05', 1),
+(24, 'Communication', 82, 100, '2024-02-10', 1),
+(24, 'HR',            85, 100, '2024-02-15', 1),
+(25, 'Aptitude',      65, 100, '2024-02-01', 1),
+(25, 'Coding',        60, 100, '2024-02-05', 1),
+(25, 'Communication', 68, 100, '2024-02-10', 1),
+(25, 'HR',            63, 100, '2024-02-15', 1),
+(26, 'Aptitude',      83, 100, '2024-02-01', 1),
+(26, 'Coding',        80, 100, '2024-02-05', 1),
+(26, 'Communication', 86, 100, '2024-02-10', 1),
+(26, 'HR',            84, 100, '2024-02-15', 1),
+(27, 'Aptitude',      74, 100, '2024-02-01', 1),
+(27, 'Coding',        78, 100, '2024-02-05', 1),
+(27, 'Communication', 72, 100, '2024-02-10', 1),
+(27, 'HR',            70, 100, '2024-02-15', 1),
+(28, 'Aptitude',      93, 100, '2024-02-01', 1),
+(28, 'Coding',        95, 100, '2024-02-05', 1),
+(28, 'Communication', 90, 100, '2024-02-10', 1),
+(28, 'HR',            92, 100, '2024-02-15', 1),
+(29, 'Aptitude',      63, 100, '2024-02-01', 1),
+(29, 'Coding',        58, 100, '2024-02-05', 1),
+(29, 'Communication', 67, 100, '2024-02-10', 1),
+(29, 'HR',            62, 100, '2024-02-15', 1),
+(30, 'Aptitude',      92, 100, '2024-02-01', 1),
+(30, 'Coding',        95, 100, '2024-02-05', 1),
+(30, 'Communication', 90, 100, '2024-02-10', 1),
+(30, 'HR',            93, 100, '2024-02-15', 1),
+-- Students 31-56
+(31, 'Aptitude',      72, 100, '2024-02-01', 1),
+(31, 'Coding',        75, 100, '2024-02-05', 1),
+(31, 'Communication', 70, 100, '2024-02-10', 1),
+(31, 'HR',            68, 100, '2024-02-15', 1),
+(32, 'Aptitude',      80, 100, '2024-02-01', 1),
+(32, 'Coding',        83, 100, '2024-02-05', 1),
+(32, 'Communication', 78, 100, '2024-02-10', 1),
+(32, 'HR',            76, 100, '2024-02-15', 1),
+(33, 'Aptitude',      52, 100, '2024-02-01', 1),
+(33, 'Coding',        45, 100, '2024-02-05', 1),
+(33, 'Communication', 58, 100, '2024-02-10', 1),
+(33, 'HR',            55, 100, '2024-02-15', 1),
+(34, 'Aptitude',      88, 100, '2024-02-01', 1),
+(34, 'Coding',        90, 100, '2024-02-05', 1),
+(34, 'Communication', 92, 100, '2024-02-10', 1),
+(34, 'HR',            89, 100, '2024-02-15', 1),
+(35, 'Aptitude',      74, 100, '2024-02-01', 1),
+(35, 'Coding',        70, 100, '2024-02-05', 1),
+(35, 'Communication', 76, 100, '2024-02-10', 1),
+(35, 'HR',            72, 100, '2024-02-15', 1),
+(36, 'Aptitude',      84, 100, '2024-02-01', 1),
+(36, 'Coding',        87, 100, '2024-02-05', 1),
+(36, 'Communication', 82, 100, '2024-02-10', 1),
+(36, 'HR',            85, 100, '2024-02-15', 1),
+(37, 'Aptitude',      72, 100, '2024-02-01', 1),
+(37, 'Coding',        75, 100, '2024-02-05', 1),
+(37, 'Communication', 70, 100, '2024-02-10', 1),
+(37, 'HR',            68, 100, '2024-02-15', 1),
+(38, 'Aptitude',      92, 100, '2024-02-01', 1),
+(38, 'Coding',        94, 100, '2024-02-05', 1),
+(38, 'Communication', 90, 100, '2024-02-10', 1),
+(38, 'HR',            91, 100, '2024-02-15', 1),
+(39, 'Aptitude',      62, 100, '2024-02-01', 1),
+(39, 'Coding',        58, 100, '2024-02-05', 1),
+(39, 'Communication', 65, 100, '2024-02-10', 1),
+(39, 'HR',            60, 100, '2024-02-15', 1),
+(40, 'Aptitude',      80, 100, '2024-02-01', 1),
+(40, 'Coding',        82, 100, '2024-02-05', 1),
+(40, 'Communication', 78, 100, '2024-02-10', 1),
+(40, 'HR',            76, 100, '2024-02-15', 1),
+(41, 'Aptitude',      65, 100, '2024-02-01', 1),
+(41, 'Coding',        62, 100, '2024-02-05', 1),
+(41, 'Communication', 68, 100, '2024-02-10', 1),
+(41, 'HR',            65, 100, '2024-02-15', 1),
+(42, 'Aptitude',      93, 100, '2024-02-01', 1),
+(42, 'Coding',        95, 100, '2024-02-05', 1),
+(42, 'Communication', 91, 100, '2024-02-10', 1),
+(42, 'HR',            94, 100, '2024-02-15', 1),
+(43, 'Aptitude',      40, 100, '2024-02-01', 1),
+(43, 'Coding',        35, 100, '2024-02-05', 1),
+(43, 'Communication', 48, 100, '2024-02-10', 1),
+(43, 'HR',            44, 100, '2024-02-15', 1),
+(44, 'Aptitude',      82, 100, '2024-02-01', 1),
+(44, 'Coding',        85, 100, '2024-02-05', 1),
+(44, 'Communication', 80, 100, '2024-02-10', 1),
+(44, 'HR',            83, 100, '2024-02-15', 1),
+(45, 'Aptitude',      65, 100, '2024-02-01', 1),
+(45, 'Coding',        68, 100, '2024-02-05', 1),
+(45, 'Communication', 62, 100, '2024-02-10', 1),
+(45, 'HR',            60, 100, '2024-02-15', 1),
+(46, 'Aptitude',      76, 100, '2024-02-01', 1),
+(46, 'Coding',        78, 100, '2024-02-05', 1),
+(46, 'Communication', 74, 100, '2024-02-10', 1),
+(46, 'HR',            72, 100, '2024-02-15', 1),
+(47, 'Aptitude',      77, 100, '2024-02-01', 1),
+(47, 'Coding',        80, 100, '2024-02-05', 1),
+(47, 'Communication', 75, 100, '2024-02-10', 1),
+(47, 'HR',            73, 100, '2024-02-15', 1),
+(48, 'Aptitude',      90, 100, '2024-02-01', 1),
+(48, 'Coding',        88, 100, '2024-02-05', 1),
+(48, 'Communication', 92, 100, '2024-02-10', 1),
+(48, 'HR',            91, 100, '2024-02-15', 1),
+(49, 'Aptitude',      63, 100, '2024-02-01', 1),
+(49, 'Coding',        60, 100, '2024-02-05', 1),
+(49, 'Communication', 67, 100, '2024-02-10', 1),
+(49, 'HR',            64, 100, '2024-02-15', 1),
+(50, 'Aptitude',      91, 100, '2024-02-01', 1),
+(50, 'Coding',        89, 100, '2024-02-05', 1),
+(50, 'Communication', 93, 100, '2024-02-10', 1),
+(50, 'HR',            90, 100, '2024-02-15', 1),
+(51, 'Aptitude',      74, 100, '2024-02-01', 1),
+(51, 'Coding',        76, 100, '2024-02-05', 1),
+(51, 'Communication', 72, 100, '2024-02-10', 1),
+(51, 'HR',            70, 100, '2024-02-15', 1),
+(52, 'Aptitude',      78, 100, '2024-02-01', 1),
+(52, 'Coding',        80, 100, '2024-02-05', 1),
+(52, 'Communication', 76, 100, '2024-02-10', 1),
+(52, 'HR',            74, 100, '2024-02-15', 1),
+(53, 'Aptitude',      35, 100, '2024-02-01', 1),
+(53, 'Coding',        30, 100, '2024-02-05', 1),
+(53, 'Communication', 42, 100, '2024-02-10', 1),
+(53, 'HR',            40, 100, '2024-02-15', 1),
+(54, 'Aptitude',      85, 100, '2024-02-01', 1),
+(54, 'Coding',        82, 100, '2024-02-05', 1),
+(54, 'Communication', 88, 100, '2024-02-10', 1),
+(54, 'HR',            86, 100, '2024-02-15', 1),
+(55, 'Aptitude',      70, 100, '2024-02-01', 1),
+(55, 'Coding',        72, 100, '2024-02-05', 1),
+(55, 'Communication', 68, 100, '2024-02-10', 1),
+(55, 'HR',            66, 100, '2024-02-15', 1),
+(56, 'Aptitude',      95, 100, '2024-02-01', 1),
+(56, 'Coding',        97, 100, '2024-02-05', 1),
+(56, 'Communication', 93, 100, '2024-02-10', 1),
+(56, 'HR',            96, 100, '2024-02-15', 1);
+-- ============================================================
+-- VERIFY ALL INSERTS
+-- ============================================================
+SELECT * FROM Certifications;
+SELECT * FROM internships;
+SELECT * FROM mock_tests;
+SELECT * FROM placement_score;
+SELECT * FROM projects;
+SELECT * FROM skills;
+SELECT * FROM students;
+
+-- ============================================================
+--  PLACEMENT READINESS ANALYTICS SYSTEM
+--  Phase 3 : Placement Readiness Score Engine (MySQL)
+--  Weighted Scoring via Views + Stored Procedure
+-- ============================================================
+ 
+USE placement_readiness;
+ 
+-- ============================================================
+-- SCORING FORMULA REFERENCE
+-- ============================================================
+--  Component         Weight   Max Pts   Logic
+--  ──────────────    ──────   ───────   ─────────────────────────────────
+--  Academic (CGPA)    25%      25        (CGPA / 10) * 25
+--  Skills             20%      20        MIN(tech_skill_count * avg_prof / 25, 1) * 20
+--  Certifications     10%      10        MIN(cert_count, 5) / 5 * 10
+--  Internships        20%      20        MIN(total_weeks / 24, 1) * 15 + paid_bonus (5)
+--  Projects           15%      15        complexity points + github/deploy bonus
+--  Mock Tests         10%      10        (avg_mock_score / 100) * 10
+--  ──────────────    ──────   ───────
+--  TOTAL             100%     100
+--
+--  Readiness Band:
+--    High   : total_score >= 70
+--    Medium : total_score >= 40 AND < 70
+--    Low    : total_score < 40
+-- ============================================================
+
+-- STEP 1 : VIEW — v_academic_score
+-- Calculates academic component out of 25 pts
+-- Penalises active backlogs
+-- ============================================================
+
+CREATE OR REPLACE VIEW v_academic_score AS 
+SELECT
+	student_id,
+    cgpa,
+    active_backlogs,
+    ROUND(
+		GREATEST(
+			((cgpa / 10.0 )* 25) - (active_backlogs * 2),
+            0
+		), 2
+	) AS academic_score
+FROM students;
+
+SELECT * FROM v_academic_score;
+
+-- ============================================================
+-- STEP 2 : VIEW — v_skills_score
+-- Calculates skills component out of 20 pts
+-- Based on number of Technical skills + average proficiency
+-- ============================================================
+
+CREATE OR REPLACE VIEW v_skills_score AS 
+SELECT
+	s.student_id,
+	COUNT(CASE WHEN sk.skill_category = "Technical" THEN 1 END) AS tech_skill_count,
+    ROUND(AVG(sk.proficiency) , 2) AS avg_proficiency,
+    ROUND(
+		LEAST(
+			(COUNT(CASE WHEN sk.skill_category = "Technical" THEN 1 END) *
+            COALESCE(AVG(sk.proficiency) , 0)) / 25.0 * 20,
+			20
+		) , 2
+	) AS skills_score
+FROM students s
+LEFT JOIN skills sk 
+ON s.student_id = sk.student_id
+GROUP BY s.student_id;
+
+SELECT * FROM v_skills_score;
+
+-- ============================================================
+-- STEP 3 : VIEW — v_certifications_score
+-- Calculates certifications component out of 10 pts
+-- Max 5 certs counted; each worth 2 pts
+-- ============================================================
+
+CREATE OR REPLACE VIEW v_certifications_score AS
+SELECT 
+	s.student_id ,
+    COUNT(c.cert_id) AS cert_count,
+    ROUND(
+		LEAST(COUNT(c.cert_id) , 5 ) / 5.0 * 10,
+        2
+	) AS certifications_score
+FROM students s
+LEFT JOIN certifications c 
+ON s.student_id = c.student_id
+GROUP BY student_id;
+
+SELECT * FROM v_certifications_score;
+
+-- ============================================================
+-- STEP 4 : VIEW — v_internship_score
+-- Calculates internship component out of 20 pts
+-- Duration worth 15 pts (capped at 24 weeks)
+-- Paid internship bonus: 5 pts
+-- ============================================================
+
+CREATE OR REPLACE VIEW v_internship_score AS
+SELECT 
+	s.student_id,
+    COALESCE(SUM(i.duration_weeks), 0) AS total_weeks,
+    MAX(
+		CASE
+			WHEN i.is_paid = TRUE THEN 1
+			ELSE 0
+	    END
+	)                     AS has_paid_internship,
+    
+    ROUND(
+		LEAST(
+			COALESCE(SUM(i.duration_weeks) , 0) / 24.0 , 1) * 15
+            + (MAX(CASE WHEN i.is_paid = TRUE THEN 1 ELSE 0 END) * 5),
+            2
+		) AS internship_score
+FROM students s
+LEFT JOIN internships i 
+ON s.student_id = i.student_id
+GROUP BY student_id;
+
+SELECT * FROM v_internship_score;
+
+-- ============================================================
+-- STEP 5 : VIEW — v_projects_score
+-- Calculates projects component out of 15 pts
+-- Basic=1pt, Intermediate=2pt, Advanced=3pt per project
+-- GitHub bonus: 0.5pt per project; Deploy bonus: 0.5pt per project
+-- Capped at 15 pts
+-- ============================================================
+
+CREATE OR REPLACE VIEW v_projects_score AS 
+SELECT
+	s.student_id,
+    COUNT(p.project_id) AS project_count,
+    ROUND(	
+		LEAST(
+			COALESCE(
+				SUM(
+					CASE p.complexity
+						WHEN "Basic" THEN 1.0
+						WHEN "Intermediate" THEN 1.0
+						WHEN "Advanced" THEN 1.0
+						ELSE 0
+                    END
+                    + (CASE WHEN p.has_github = TRUE THEN 0.5 ELSE 0 END) 
+                    + (CASE WHEN p.is_deployed = TRUE THEN 0.5 ELSE 0 END)
+				),0
+			), 15
+		),2
+	) AS projects_score
+FROM students s
+LEFT JOIN projects p 
+ON s.student_id = p.student_id
+GROUP BY s.student_id;
+                    
+SELECT * FROM projects_score;
+
+-- ============================================================
+-- STEP 6 : VIEW — v_mock_test_score
+-- Calculates mock test component out of 10 pts
+-- Average of all test scores normalised to 10
+-- ============================================================
+
+CREATE OR REPLACE VIEW v_mock_test_score AS 
+SELECT 
+	s.student_id,
+    ROUND(AVG(mt.score),2) AS avg_mock_score,
+    ROUND(COALESCE(AVG(mt.score),0) / 100 * 10 , 2) AS mock_test_score
+FROM students s
+LEFT JOIN mock_tests mt 
+ON s.student_id = mt.student_id
+GROUP BY s.student_id;
+
+-- ============================================================
+-- STEP 7 : MASTER VIEW — v_placement_readiness
+-- Joins all 6 component views into one master readiness view
+-- This is the view you will connect to Power BI
+-- ============================================================
+
+CREATE OR REPLACE VIEW v_placement_readiness AS
+SELECT
+    st.student_id,
+    st.full_name,
+    st.branch,
+    st.year_of_study,
+    st.cgpa,
+    st.active_backlogs,
+    st.gender,
+    st.city,
+    
+     -- Component scores
+    ac.academic_score,
+    sk.skills_score,
+    ce.certifications_score,
+    iv.internship_score,
+    pj.projects_score,
+    mt.mock_test_score,
+    
+    -- Total score
+
+	ROUND(
+		 ac.academic_score+
+		sk.skills_score+
+		ce.certifications_score+
+		iv.internship_score+
+		pj.projects_score+
+		mt.mock_test_score,
+        2
+    ) AS Total_score,
+		
+        -- Readiness band
+
+CASE 
+	WHEN 
+		ROUND(
+			 ac.academic_score + sk.skills_score + ce.certifications_score +
+             iv.internship_score + pj.projects_score + mt.mock_test_score, 2
+	) >= 70 THEN 'High'
+    
+    WHEN 
+		ROUND(
+			 ac.academic_score + sk.skills_score + ce.certifications_score +
+             iv.internship_score + pj.projects_score + mt.mock_test_score, 2
+	) >= 40 THEN 'Medium'
+    ELSE 'Low'
+END AS Readiness_band,
+
+    -- Supporting counts for dashboards
+    
+    sk.tech_skill_count,
+    sk.avg_proficiency,
+    ce.cert_count,
+    iv.total_weeks        AS internship_weeks,
+    iv.has_paid_internship,
+    pj.project_count,
+    mt.avg_mock_score
+    
+FROM students st
+JOIN v_academic_score      ac ON st.student_id = ac.student_id
+JOIN v_skills_score        sk ON st.student_id = sk.student_id
+JOIN v_certifications_score ce ON st.student_id = ce.student_id
+JOIN v_internship_score    iv ON st.student_id = iv.student_id
+JOIN v_projects_score      pj ON st.student_id = pj.student_id
+JOIN v_mock_test_score     mt ON st.student_id = mt.student_id;
+
+SELECT * FROM v_placement_readiness;
+
+-- ============================================================
+-- STEP 8 : STORED PROCEDURE — sp_calculate_placement_scores
+-- Reads from v_placement_readiness and populates placement_score table
+-- Run this whenever student data changes
+-- ============================================================
+
+DROP PROCEDURE IF EXISTS sp_calculate_placement_scores;
+ 
+DELIMITER $$
+ 
+CREATE PROCEDURE sp_calculate_placement_scores()
+BEGIN
+    -- Clear existing scores
+    TRUNCATE TABLE placement_score;
+ 
+    -- Insert fresh computed scores for all students
+    INSERT INTO placement_score (
+        student_id,
+        academic_score,
+        skills_score,
+        certifications_score,
+        internship_score,
+        projects_score,
+        mock_test_score,
+        total_score,
+        readiness_band
+    )
+    SELECT
+        student_id,
+        academic_score,
+        skills_score,
+        certifications_score,
+        internship_score,
+        projects_score,
+        mock_test_score,
+        total_score,
+        readiness_band
+    FROM v_placement_readiness;
+ 
+    -- Confirmation message
+    SELECT
+        COUNT(*)                                      AS total_students_scored,
+        SUM(CASE WHEN readiness_band = 'High'   THEN 1 ELSE 0 END) AS high_band,
+        SUM(CASE WHEN readiness_band = 'Medium' THEN 1 ELSE 0 END) AS medium_band,
+        SUM(CASE WHEN readiness_band = 'Low'    THEN 1 ELSE 0 END) AS low_band,
+        ROUND(AVG(total_score), 2)                    AS avg_score,
+        ROUND(MAX(total_score), 2)                    AS top_score,
+        ROUND(MIN(total_score), 2)                    AS lowest_score
+    FROM placement_score;
+END$$
+ 
+DELIMITER ;
+
+-- ============================================================
+-- STEP 9 : EXECUTE — Run the stored procedure
+USE placement_readiness;
+-- ============================================================
+
+CALL sp_calculate_placement_scores();
+
+-- ============================================================
+-- STEP 10 : VERIFY — Preview the final scores
+-- ============================================================
+
+SELECT
+    ps.student_id,
+    st.full_name,
+    st.branch,
+    st.cgpa,
+    ps.academic_score,
+    ps.skills_score,
+    ps.certifications_score,
+    ps.internship_score,
+    ps.projects_score,
+    ps.mock_test_score,
+    ps.total_score,
+    ps.readiness_band
+FROM placement_score ps
+JOIN students st ON ps.student_id = st.student_id
+ORDER BY ps.total_score DESC;
+
+-- ============================================================
+-- Phase 3 complete.
+-- Next : Phase 4 — 15+ Analytical SQL Queries
+-- ============================================================
+
+-- ============================================================
+-- QUERY 01 : Overall Student Ranking by Placement Score
+-- Purpose  : Rank all students from best to worst readiness
+-- ============================================================
+
+SELECT 
+	RANK() OVER(ORDER BY total_score DESC) AS overall_rank,
+    student_id,
+    full_name,
+    branch,
+    year_of_study,
+    cgpa,
+    total_score,
+    readiness_band
+FROM v_placement_readiness
+ORDER BY total_score DESC;
+
+-- ============================================================
+-- QUERY 02 : Readiness Band Distribution
+-- Purpose  : How many students fall in High / Medium / Low
+-- Use in   : Donut / Pie chart in Power BI
+-- ============================================================
+
+SELECT 
+	readiness_band,
+    COUNT(*) AS student_count,
+    ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER() , 1) AS percentage
+FROM v_placement_readiness
+GROUP BY readiness_band
+ORDER BY FIELD(readiness_band , 'High' , 'Medium' ,'Low' );
+
+-- ============================================================
+-- QUERY 03 : Branch-wise Average Score Comparison
+-- Purpose  : Which branch performs best overall?
+-- Use in   : Bar chart in Power BI
+-- ============================================================
+
+SELECT
+    branch,
+    COUNT(*)                          AS total_students,
+    ROUND(AVG(cgpa), 2)               AS avg_cgpa,
+    ROUND(AVG(academic_score), 2)     AS avg_academic,
+    ROUND(AVG(skills_score), 2)       AS avg_skills,
+    ROUND(AVG(internship_score), 2)   AS avg_internship,
+    ROUND(AVG(projects_score), 2)     AS avg_projects,
+    ROUND(AVG(mock_test_score), 2)    AS avg_mock,
+    ROUND(AVG(total_score), 2)        AS avg_total_score
+FROM v_placement_readiness
+GROUP BY branch
+ORDER BY avg_total_score DESC;
+
+-- ============================================================
+-- QUERY 04 : Top 10 Placement-Ready Students
+-- Purpose  : Highlight the best performers
+-- Use in   : Leaderboard table in Power BI
+-- ============================================================
+
+SELECT 
+	RANK()OVER(ORDER BY total_score DESC) AS rank_position,
+    full_name,
+    branch,
+    cgpa,
+    total_score,
+    readiness_band,
+    tech_skill_count,
+    cert_count,
+    internship_weeks,
+    project_count
+FROM v_placement_readiness
+ORDER BY total_score DESC
+LIMIT 10; 
+
+-- ============================================================
+-- QUERY 05 : Students Needing Immediate Attention (Low Band)
+-- Purpose  : Identify at-risk students for intervention
+-- Use in   : Alert table / conditional formatting in Power BI
+-- ============================================================
+
+SELECT
+    student_id,
+    full_name,
+    branch,
+    year_of_study,
+    cgpa,
+    active_backlogs,
+    total_score,
+    ROUND(100 - total_score, 2)            AS score_gap_to_max,
+    CASE 
+		WHEN academic_score < 10 THEN 'Improve CGPA'
+        WHEN skills_score < 8 THEN 'Learn More Skills'
+        WHEN internship_score = 0 THEN 'Get an Internship'
+        WHEN cert_count = 0 THEN 'Earn Certifications'
+        ELSE 'General Improvement'
+	END AS 'Top Recommendations'
+FROM v_placement_readiness
+WHERE readiness_band = 'Low'
+ORDER BY total_score ASC;
+
+-- ============================================================
+-- QUERY 06 : Component-wise Score Gap Analysis
+-- Purpose  : Find the weakest scoring area across all students
+-- Use in   : Radar / Spider chart in Power BI
+-- ============================================================
+
+SELECT
+    'Academic'       AS component, ROUND(AVG(academic_score), 2)      AS avg_score, 25  AS max_score, ROUND(AVG(academic_score)/25*100, 1)      AS pct_achieved FROM v_placement_readiness
+UNION ALL
+SELECT 'Skills',                   ROUND(AVG(skills_score), 2),        20,           ROUND(AVG(skills_score)/20*100, 1)        FROM v_placement_readiness
+UNION ALL
+SELECT 'Certifications',           ROUND(AVG(certifications_score), 2),10,           ROUND(AVG(certifications_score)/10*100, 1)FROM v_placement_readiness
+UNION ALL
+SELECT 'Internships',              ROUND(AVG(internship_score), 2),    20,           ROUND(AVG(internship_score)/20*100, 1)    FROM v_placement_readiness
+UNION ALL
+SELECT 'Projects',                 ROUND(AVG(projects_score), 2),      15,           ROUND(AVG(projects_score)/15*100, 1)      FROM v_placement_readiness
+UNION ALL
+SELECT 'Mock Tests',               ROUND(AVG(mock_test_score), 2),     10,           ROUND(AVG(mock_test_score)/10*100, 1)     FROM v_placement_readiness
+ORDER BY pct_achieved ASC;
+    
+-- ============================================================
+-- QUERY 07 : Gender-wise Readiness Comparison
+-- Purpose  : Diversity and inclusion insight
+-- Use in   : Grouped bar chart in Power BI
+-- ============================================================
+
+SELECT
+    gender,
+    COUNT(*)                           AS total_students,
+    ROUND(AVG(total_score), 2)         AS avg_score,
+    SUM(CASE WHEN readiness_band = 'High'   THEN 1 ELSE 0 END) AS high_count,
+    SUM(CASE WHEN readiness_band = 'Medium' THEN 1 ELSE 0 END) AS medium_count,
+    SUM(CASE WHEN readiness_band = 'Low'    THEN 1 ELSE 0 END) AS low_count
+FROM v_placement_readiness
+GROUP BY gender;    
+
+-- ============================================================
+-- QUERY 08 : Year-of-Study vs Readiness Progression
+-- Purpose  : Do senior students score higher? (Trend analysis)
+-- Use in   : Line chart in Power BI
+-- ============================================================
+
+SELECT
+    year_of_study,
+    COUNT(*)                           AS student_count,
+    ROUND(AVG(total_score), 2)         AS avg_total_score,
+    ROUND(AVG(cgpa), 2)                AS avg_cgpa,
+    ROUND(AVG(tech_skill_count), 1)    AS avg_skills,
+    ROUND(AVG(cert_count), 1)          AS avg_certs,
+    ROUND(AVG(internship_weeks), 1)    AS avg_intern_weeks,
+    ROUND(AVG(project_count), 1)       AS avg_projects
+FROM v_placement_readiness
+GROUP BY year_of_study
+ORDER BY year_of_study;
+
+-- ============================================================
+-- QUERY 09 : Internship Impact on Placement Score
+-- Purpose  : Do students with paid internships score higher?
+-- Use in   : Comparison card / bar chart in Power BI
+-- ============================================================
+
+SELECT
+    CASE
+        WHEN has_paid_internship = 1 AND internship_weeks >= 12 THEN 'Paid + Long (12w+)'
+        WHEN has_paid_internship = 1 AND internship_weeks  < 12 THEN 'Paid + Short (<12w)'
+        WHEN has_paid_internship = 0 AND internship_weeks  > 0  THEN 'Unpaid Internship'
+        ELSE 'No Internship'
+    END AS internship_category,
+    COUNT(*)                           AS student_count,
+    ROUND(AVG(total_score), 2)         AS avg_total_score,
+    ROUND(AVG(internship_score), 2)    AS avg_intern_score
+FROM v_placement_readiness
+GROUP BY internship_category
+ORDER BY avg_total_score DESC;
+
+-- ============================================================
+-- QUERY 10 : Top Skills Among High-Band Students
+-- Purpose  : What skills do placement-ready students have?
+-- Use in   : Word cloud / horizontal bar in Power BI
+-- ============================================================
+
+SELECT
+    sk.skill_name,
+    sk.skill_category,
+    COUNT(*)                           AS student_count,
+    ROUND(AVG(sk.proficiency), 2)      AS avg_proficiency
+FROM skills sk
+JOIN v_placement_readiness vpr ON sk.student_id = vpr.student_id
+WHERE vpr.readiness_band = 'High'
+  AND sk.skill_category  = 'Technical'
+GROUP BY sk.skill_name, sk.skill_category
+ORDER BY student_count DESC, avg_proficiency DESC
+LIMIT 15;
